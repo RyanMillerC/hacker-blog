@@ -28,29 +28,29 @@ It's assumed that an OpenShift client has been configured in Keycloak and that O
 
 ## Create the Role, Group, and Role Mapping
 
-The first step is to create a role, create a group, and map those together.
+The first step is to create a realm role, create a group, and map those together.
 It's a good idea to keep these the same name.
 
-I used `ocp-user` for my group and role name.
+I used `ocp-user` for my realm role and group name.
 
-### Add a New Role
+### Add a New Realm Role
 
 * On the left side navigation bar, select *Roles*
-* Add a new role
+* Add a new realm role named `ocp-user`
 
 ![Add a new role](assets/2022-11-04-Deny-Application-Access-in-Keycloak/01_add_role.png)
 
 ### Create a New Group
 
 * On the left side navigation bar, select *Groups*.
-* Create a new group
+* Create a new group `ocp-user`
 
 ![Create a new group](assets/2022-11-04-Deny-Application-Access-in-Keycloak/02_create_group.png)
 
-### Map the Group to the Role
+### Map the Group to the Realm Role
 
 * On the group page, select the *Role Mappings* tab
-* Map the `ocp-user` group to the `ocp-user` role
+* Under *Realm Roles*, select `ocp-user` to map the role to the group
 
 ![Map group to role](assets/2022-11-04-Deny-Application-Access-in-Keycloak/03_group_role_mappings.png)
 
@@ -67,23 +67,24 @@ These two users will be tested to validate that Keycloak is denying users that a
 ### Create an OpenShift User
 
 * On the left side navigation bar, select *Users*
-* Create a new user
-* **Note the `ocp-user` group membership on this user**
+* Create a new user named `ryan`
+* **Add the user to the `ocp-user` group**
 
 ![Create an OpenShift user](assets/2022-11-04-Deny-Application-Access-in-Keycloak/04_add_ocp_user.png)
 
 ### Create a Regular (Non-OpenShift) User
 
 * On the left side navigation bar, select *Users*
-* Create a new user
-* **Do not add the `ocp-user` group membership on this user**
+* Create a new user named `logan`
+* **Do NOT add the `ocp-user` group membership on this user**
 
 ![Create an non-OpenShift user](assets/2022-11-04-Deny-Application-Access-in-Keycloak/05_add_non_ocp_user.png)
 
 ## Create an Authentication Flow
 
 The next step is to create an authentication flow that will be executed when a user is redirected to Keycloak for authentication.
-Keycloak comes with several authentication flows out of the box, but I find it easier to start from scratch instead of copying an existing flow.
+Keycloak comes with several authentication flows out of the box.
+I find it easier to start from scratch instead of copying an existing flow.
 Once you create an initial flow, it's ok to copy that flow for other applications.
 (For example if you need to deny access to OpenShift and Vault based on two separate groups.)
 
@@ -97,29 +98,43 @@ Once you create an initial flow, it's ok to copy that flow for other application
 
 ### Add Execution Steps into the OpenShift Authentication Flow
 
-* On the right, select *Add Sub-flow*
-* Create a sub-flow named *Login* (as *Required*)
-* Create a second sub-flow named *RBAC* (as *Conditional*)
-* **Make sure the sub-flows are not nested. They should both be at the root level.**
-* Under the *Login* sub-flow, create execution steps for:
-    * Cookie (as *Alternative*)
-    * Username Password Form (as *Required*)
-* Under the *Check Role* sub-flow, create execution steps for:
-    * Condition - User Role (as *Required*)
-    * Deny Access (as *Required*)
+* On the right, select *Add Flow*
+* Create a flow named *Login*
+* On the right, select *Add Flow* again
+* Create a flow named *RBAC*
+* **Make sure the flows are not nested. They should both be at the root level.**
+
+* On the *Login* flow, select *Actions*, then *Add Execution Step*
+* Select `Cookie` (as *Alternative*)
+* Under the *Login* flow, select *Actions*, then *Add Execution Step* again
+* Select `Username Password Form` (as *Alternative*)
+
+* On the *Check Role* flow, select *Actions*, then *Add Execution Step*
+* Select `Condition - User Role`
+* On the *Check Role* flow, select *Actions*, then *Add Execution Step* again
+* Select `Deny Access`
+
+* Set the *Requirement* on each of the flows/execution items
+    * Login - *Required*
+        * Cookie - *Alternative*
+        * Username Password Form - *Required*
+    * Check Role *Conditional*
+        * Condition - User Role - *Required*
+        * Deny Access - *Required*
 
 ![Authentication flow overview](assets/2022-11-04-Deny-Application-Access-in-Keycloak/07_authentication_executions.png)
 
-### Configure Execution Steps
+### Configure the Execution Steps
 
 * Only two of the configuration steps added in the previous step need to be configured
-* Under *Actions*, configure the existing *Condition - User Role* execution step
-* Set the role to `ocp-user`
+* On the *Condition - User Role* execution step, select *Actions*, then *Config*
+* Set *User role* to `ocp-user`
+* Set *Negate output* to **ON**
 
 ![Configure "Condition - User Role" execution step](assets/2022-11-04-Deny-Application-Access-in-Keycloak/08_condition_user_role_config.png)
 
-* Under *Actions*, configure the existing *Deny Access* execution step
-* Set the deny message to `Access Denied: User does not the the "ocp-user" role`
+* On the *Deny Access* execution step, select *Actions*, then *Config*
+* Set *Error Message* to `Access Denied: User does not have the "ocp-user" role`
 
 ![Configure "Deny Access" execution step ](assets/2022-11-04-Deny-Application-Access-in-Keycloak/09_deny_user_config.png)
 
